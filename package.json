@@ -1,0 +1,23 @@
+{
+  "name": "md-render-good-for-homework",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "highlight.js": "^11.11.1",
+    "katex": "^0.19.0",
+    "markdown-it": "^14.1.0",
+    "markdown-it-task-lists": "^2.1.1",
+    "markdown-it-texmath": "^1.0.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.10"
+  },
+  "license": "MIT"
+}

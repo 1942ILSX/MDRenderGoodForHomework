@@ -1,0 +1,38 @@
+# Dependencies and local tools
+.venv/
+venv/
+node_modules/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.idea/
+.vscode/
+.DS_Store
+
+# Generated frontend bundles, fonts and license copies
+/static/app.js
+/static/renderer.js
+/static/app.css
+/static/renderer.css
+/static/*.LEGAL.txt
+/static/fonts/
+/static/vendor/
+
+# Test output and local configuration
+/tests/results/
+.env
+.env.*
+
+# Hosting configuration and build output are not part of this source repository
+/DEPLOYMENT.md
+/wrangler.jsonc
+/wrangler.toml
+/serverless/
+/scripts/build-serverless.mjs
+/scripts/test-browser.mjs
+/tests/serverless.test.mjs
+/.wrangler/
+/.worker-build/
+/dist/
+.dev.vars
+.dev.vars.*
