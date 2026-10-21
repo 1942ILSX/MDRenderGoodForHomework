@@ -37,6 +37,7 @@ input[type=checkbox], input[type=radio], input[type=range] { accent-color: var(-
 .action-divider { width: 1px; height: 20px; background: var(--border); margin: 0 8px; }
 .workspace-bar { min-height: 38px; padding: 0 24px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); font-size: 11px; color: var(--muted); }
 .workspace-tools { display: flex; align-items: center; gap: 12px; }
+.language-picker select { background: transparent; color: #333; border: 1px solid var(--border); border-radius: 0; padding: 4px 6px; font-size: 11px; cursor: pointer; }
 .text-button { background: none; border: 0; color: inherit; font-size: 11px; padding: 5px 6px; }
 kbd { border: 1px solid #ccc; font-size: 10px; padding: 1px 4px; color: #555; font-family: inherit; margin-left: 4px; }
 
@@ -96,7 +97,7 @@ dialog::backdrop { background: #0005; }
 .mode-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .mode-cards label { cursor: pointer; position: relative; }
 .mode-cards input { position: absolute; top: 14px; left: 12px; margin: 0; width: 13px; height: 13px; z-index: 1; }
-.mode-card { display: flex; flex-direction: column; border: 1px solid #bcbcbc; padding: 12px 10px 12px 33px; background: #fff; }
+.mode-card { display: flex; flex-direction: column; height: 100%; border: 1px solid #bcbcbc; padding: 12px 10px 12px 33px; background: #fff; }
 .mode-cards input:checked + .mode-card { border-color: #161616; background: #f2f2f2; }
 .mode-card strong { font-size: 12px; font-weight: 600; margin: 0 0 6px; }
 .mode-card small { font-size: 10px; color: #555; line-height: 1.5; }
@@ -155,6 +156,10 @@ dialog::backdrop { background: #0005; }
   .btn { min-height: 34px; font-size: 11px; padding: 0 10px; }
   .workspace-bar { padding: 0 16px; min-height: 36px; }
   .workspace-tools { gap: 5px; }
+  .workspace-label { display: none; }
+  .workspace-tools { width: 100%; justify-content: flex-end; }
+  .language-picker { margin-right: auto; }
+  .language-picker select { max-width: 84px; }
   .workspace-tools kbd { display: none; }
   .workspace { display: block; position: relative; }
   .editor-pane, .preview-pane { height: 100%; }
@@ -165,10 +170,11 @@ dialog::backdrop { background: #0005; }
   .editor-indicator { display: none; }
   .pane-heading { height: 46px; min-height: 46px; padding: 0 16px; }
   .preview-controls { gap: 8px !important; }
-  .format-toolbar { gap: 7px; padding: 0 12px; }
+  .format-toolbar { gap: 7px; padding: 0 12px; overflow-x: auto; }
   .preview-toolbar { padding: 0 16px; }
   .preview-scroll { padding: 20px 16px; }
   .editor-footer, .preview-footer { padding: 0 16px; font-size: 10px; }
+  .preview-footer { height: auto; min-height: 32px; flex-wrap: wrap; padding-block: 6px; gap: 6px 12px; }
   .dialog-heading { padding: 24px 20px; }
   .settings-grid { margin: 24px 20px; }
   .mode-field { margin: 0 20px; }

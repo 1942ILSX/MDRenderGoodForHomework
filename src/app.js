@@ -1,127 +1,16 @@
 import { renderMarkdown, applyDocumentStyle } from './renderer.js';
 
-const LEGACY_EXAMPLE = String.raw`# 让想法，自然成页。
+import { LEGACY_EXAMPLE, exampleFor } from './examples.js';
+import { LANGUAGE_KEY, catalogs, resolveLocale, translate, translatePage } from './i18n.js';
 
-每一个值得记录的想法，都值得一份清晰的表达。
-在左侧写下 Markdown，在右侧看见它的模样。
-
-> 写作，是把思考的过程留在纸上。
-
-## 01 / 从文字开始
-
-用 **粗体** 标记重点，用 *斜体* 留下一点语气。
-无论是学习笔记、技术文档，还是一份认真准备的报告，
-墨页都可以陪你从第一行写到最后一页。
-
-- 实时预览，让排版与思考同步
-- 自定义页宽，让长文找到合适的尺度
-- 一页长文或多页文档，按需导出 PDF
-
-## 02 / 让公式也优雅
-
-爱因斯坦用一个简洁的公式，连接了质量与能量：$E = mc^2$。
-而一条高斯曲线，描绘了随机世界里的秩序：
-
-$$
-f(x) = \frac{1}{\sigma\sqrt{2\pi}}
-       e^{-\frac{(x-\mu)^2}{2\sigma^2}}
-$$
-
-也支持矩阵、积分和多行推导：
-
-$$
-\begin{aligned}
-\int_0^1 x^2\,dx
-&= \left[\frac{x^3}{3}\right]_0^1 \\
-&= \frac{1}{3}
-\end{aligned}
-$$
-
-## 03 / 有条理，也有细节
-
-| 内容 | 写法 | 呈现 |
-| :--- | :--- | :--- |
-| 行内公式 | \`$E = mc^2$\` | 与文字自然衔接 |
-| 独立公式 | \`$$ ... $$\` | 居中展示，清晰易读 |
-| 代码片段 | 三个反引号 + 语言 | 保留缩进，自动高亮 |
-
-\`\`\`python
-from math import sqrt, pi, exp
-
-def gaussian(x, mu=0, sigma=1):
-    """在复杂的世界里，发现简单的规律。"""
-    return exp(-0.5 * ((x - mu) / sigma) ** 2) / (sigma * sqrt(2 * pi))
-\`\`\`
-
-### 一份小小的写作清单
-
-- [x] 记录一个想法
-- [x] 为它找到清晰的表达
-- [ ] 点击右上角，将它保存为 PDF
-
----
-
-*留一点空白，给下一个想法。*
-`.replaceAll('\\`', '`');
-
-export const EXAMPLE = String.raw`# Markdown 示例
-
-在左侧编辑源码，右侧查看排版结果。
-
-## 基本文本
-
-支持 **粗体**、*斜体*、~~删除线~~、列表和引用。
-
-> 引用内容使用大于号开头。
-
-- 打开或拖入 Markdown 文件
-- 使用工具栏插入图片、表格和公式
-- 保存源码，或导出 PDF
-
-## 数学公式
-
-行内公式：$E = mc^2$。
-
-独立公式：
-
-$$
-f(x) = \frac{1}{\sigma\sqrt{2\pi}}
-       e^{-\frac{(x-\mu)^2}{2\sigma^2}}
-$$
-
-多行推导：
-
-$$
-\begin{aligned}
-\int_0^1 x^2\,dx
-&= \left[\frac{x^3}{3}\right]_0^1 \\
-&= \frac{1}{3}
-\end{aligned}
-$$
-
-## 表格与代码
-
-| 功能 | 语法 | 说明 |
-| :--- | :--- | :--- |
-| 行内公式 | \`$...$\` | 与正文同行 |
-| 独立公式 | \`$$...$$\` | 单独居中 |
-| 代码块 | 三个反引号 + 语言 | 自动高亮 |
-
-\`\`\`python
-from math import sqrt, pi, exp
-
-def gaussian(x, mu=0, sigma=1):
-    return exp(-0.5 * ((x - mu) / sigma) ** 2) / (sigma * sqrt(2 * pi))
-\`\`\`
-
-## 导出设置
-
-- [x] 选择页面宽度、边距和字号
-- [x] 单页模式按内容计算高度
-- [ ] 分页模式按指定页高自动分页
-
-导出前请检查预览中的公式、图片和表格。
-`.replaceAll('\\`', '`');
+let locale = resolveLocale(navigator.languages || [navigator.language]);
+try {
+  const savedLanguage = localStorage.getItem(LANGUAGE_KEY);
+  if (Object.hasOwn(catalogs, savedLanguage)) locale = savedLanguage;
+} catch { /* Language selection also works without storage. */ }
+const t = (key, parameters) => translate(locale, key, parameters);
+let lastError = null, toastState = null, exporting = false;
+let saveState = 'saved';
 
 const $ = id => document.getElementById(id);
 const editor = $('editor');
@@ -132,13 +21,13 @@ const presets = { a4: [210, 297], a5: [148, 210], letter: [215.9, 279.4] };
 const STORAGE_KEY = 'moye-draft-v1';
 let settings = { ...defaults };
 let renderTimer, saveTimer, toastTimer, fit = true, draftSaved = true;
-let source = EXAMPLE, name = '示例文档';
+let source = exampleFor(locale), name = t('exampleName');
 try {
   const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
   if (saved && typeof saved.markdown === 'string') {
-    source = saved.markdown === LEGACY_EXAMPLE ? EXAMPLE : saved.markdown;
+    source = saved.markdown === LEGACY_EXAMPLE ? exampleFor(locale) : saved.markdown;
     name = typeof saved.name === 'string' ? saved.name : name;
-    if (saved.markdown === LEGACY_EXAMPLE && name === '我的第一份文档') name = '示例文档';
+    if (saved.markdown === LEGACY_EXAMPLE && name === '我的第一份文档') name = t('exampleName');
     for (const key of Object.keys(defaults)) {
       if (typeof saved.settings?.[key] === typeof defaults[key]) settings[key] = saved.settings[key];
     }
@@ -153,8 +42,9 @@ try {
 editor.value = source;
 $('filename').value = name;
 
-function toast(message) {
-  $('toast').textContent = message;
+function toast(key, parameters = {}) {
+  toastState = { key, parameters };
+  $('toast').textContent = t(key, parameters);
   $('toast').classList.add('visible');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => $('toast').classList.remove('visible'), 3200);
@@ -164,24 +54,27 @@ function saveDraft() {
   clearTimeout(saveTimer);
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ markdown: editor.value, name: $('filename').value, settings }));
-    $('save-status').textContent = '草稿已保存在本机';
+    saveState = 'saved';
+    $('save-status').textContent = t(saveState);
     draftSaved = true;
   } catch {
-    $('save-status').textContent = '草稿未保存，请保存 MD 文件';
+    saveState = 'unsaved';
+    $('save-status').textContent = t(saveState);
     draftSaved = false;
   }
 }
 
 function scheduleSave() {
   draftSaved = false;
-  $('save-status').textContent = '正在保存…';
+  saveState = 'saving';
+  $('save-status').textContent = t(saveState);
   clearTimeout(saveTimer);
   saveTimer = setTimeout(saveDraft, 500);
 }
 
 function updateCursor() {
   const before = editor.value.slice(0, editor.selectionStart).split('\n');
-  $('cursor-position').textContent = `行 ${before.length}，列 ${before.at(-1).length + 1}`;
+  $('cursor-position').textContent = t('cursor', { line: before.length, column: before.at(-1).length + 1 });
 }
 
 function fitPaper() {
@@ -206,8 +99,7 @@ function render() {
     const empty = !editor.value.trim();
     $('paper-frame').hidden = empty;
     $('empty-preview').hidden = !empty;
-    const count = Array.from(editor.value.replace(/!\[[^\]]*\]\(data:[^)]+\)/g, '[图片]').replace(/\s/g, '')).length;
-    $('word-count').textContent = `${count.toLocaleString()} 字符 · ${editor.value.split('\n').length} 行`;
+    updateCounts();
     $('line-numbers').textContent = Array.from({ length: editor.value.split('\n').length }, (_, i) => i + 1).join('\n');
     $('line-numbers').style.whiteSpace = 'pre';
     $('math-warning').hidden = !paper.querySelector('.katex-error');
@@ -216,7 +108,7 @@ function render() {
     document.fonts.ready.then(fitPaper);
     updateCursor();
   } catch (error) {
-    toast(`预览失败：${error.message}`);
+    toast('previewFailed', { message: error.message });
   }
 }
 
@@ -230,8 +122,7 @@ function updateSettingsUI() {
   $('height').disabled = single;
   $('auto-height-field').hidden = !single;
   $('line-height-value').value = settings.lineHeight.toFixed(1);
-  const title = selected ? { a4: 'A4', a5: 'A5', letter: 'Letter' }[selected[0]] : '自定义';
-  $('page-summary').textContent = single ? `单页长文 · ${settings.width} mm` : `${title} · ${settings.width} × ${settings.height} mm`;
+  updatePageSummary();
   applyDocumentStyle(paper, settings);
   fitPaper();
 }
@@ -242,8 +133,9 @@ function openExport() {
   $('export-dialog').showModal();
 }
 
-function setError(message) {
-  $('export-error').textContent = message;
+function setError(key, parameters = {}) {
+  lastError = { key, parameters };
+  $('export-error').textContent = t(key, parameters);
   $('export-error').hidden = false;
 }
 
@@ -259,13 +151,13 @@ function download(blob, filename) {
 }
 
 function filename(extension) {
-  return ($('filename').value.trim().replace(/[\\/:*?"<>|\u0000-\u001f]/g, '-').replace(/\.(md|markdown|pdf)$/i, '') || '未命名文档') + extension;
+  return ($('filename').value.trim().replace(/[\\/:*?"<>|\u0000-\u001f]/g, '-').replace(/\.(md|markdown|pdf)$/i, '') || t('untitled')) + extension;
 }
 
 function saveMarkdown() {
   download(new Blob([editor.value], { type: 'text/markdown;charset=utf-8' }), filename('.md'));
   saveDraft();
-  toast('Markdown 文件已保存');
+  toast('markdownSaved');
 }
 
 function replaceSelection(text, selectionOffset = null, selectionLength = 0) {
@@ -283,8 +175,8 @@ function replaceSelection(text, selectionOffset = null, selectionLength = 0) {
 
 function format(kind) {
   const selected = editor.value.slice(editor.selectionStart, editor.selectionEnd);
-  const pairs = { bold: ['**', '**', '重点文字'], italic: ['*', '*', '倾斜文字'], heading: ['\n## ', '\n', '新的标题'], quote: ['\n> ', '\n', '一段值得引用的话'], link: ['[', '](https://example.com)', '链接文字'], code: ['\n```python\n', '\n```\n', 'print("Hello, world!")'], math: ['\n$$\n', '\n$$\n', 'E = mc^2'] };
-  if (kind === 'table') return replaceSelection('\n| 标题一 | 标题二 |\n| --- | --- |\n| 内容 | 内容 |\n');
+  const pairs = { bold: ['**', '**', t('boldPlaceholder')], italic: ['*', '*', t('italicPlaceholder')], heading: ['\n## ', '\n', t('headingPlaceholder')], quote: ['\n> ', '\n', t('quotePlaceholder')], link: ['[', '](https://example.com)', t('linkPlaceholder')], code: ['\n```python\n', '\n```\n', 'print("Hello, world!")'], math: ['\n$$\n', '\n$$\n', 'E = mc^2'] };
+  if (kind === 'table') return replaceSelection(t('tableTemplate'));
   const [left, right, placeholder] = pairs[kind];
   const inner = selected || placeholder;
   replaceSelection(left + inner + right, left.length, inner.length);
@@ -292,8 +184,8 @@ function format(kind) {
 
 async function importMarkdown(file) {
   if (!file) return;
-  if (!/\.(md|markdown|txt)$/i.test(file.name)) return toast('请选择 .md、.markdown 或 .txt 文件');
-  if (file.size > 16 * 1024 * 1024) return toast('文件超过 16 MB，请缩小文档后重试');
+  if (!/\.(md|markdown|txt)$/i.test(file.name)) return toast('fileType');
+  if (file.size > 16 * 1024 * 1024) return toast('fileTooLarge');
   try {
     const text = await file.text();
     editor.value = text.replace(/^\uFEFF/, '');
@@ -303,14 +195,14 @@ async function importMarkdown(file) {
     $('line-numbers').style.transform = '';
     render();
     saveDraft();
-    toast(`已打开 ${file.name}`);
-  } catch { toast('文件读取失败，请重试'); }
+    toast('fileOpened', { name: file.name });
+  } catch { toast('fileReadFailed'); }
 }
 
 async function insertImage(file) {
   if (!file) return;
-  if (!['image/png', 'image/jpeg', 'image/gif', 'image/webp'].includes(file.type)) return toast('支持 PNG、JPEG、GIF、WebP 图片');
-  if (file.size > 5 * 1024 * 1024) return toast('单张图片请控制在 5 MB 内');
+  if (!['image/png', 'image/jpeg', 'image/gif', 'image/webp'].includes(file.type)) return toast('imageType');
+  if (file.size > 5 * 1024 * 1024) return toast('imageTooLarge');
   try {
     const data = await new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -318,10 +210,10 @@ async function insertImage(file) {
       reader.onerror = reject;
       reader.readAsDataURL(file);
     });
-    if (new Blob([editor.value, data]).size > 16 * 1024 * 1024) return toast('文档和内嵌图片总大小不能超过 16 MB');
-    replaceSelection(`\n![${file.name.replace(/[\[\]\\]/g, '') || '图片'}](${data})\n`);
-    toast('图片已内嵌，导出时会一起保留');
-  } catch { toast('图片读取失败'); }
+    if (new Blob([editor.value, data]).size > 16 * 1024 * 1024) return toast('errorDocumentSize');
+    replaceSelection(`\n![${file.name.replace(/[\[\]\\]/g, '') || t('image')}](${data})\n`);
+    toast('imageEmbedded');
+  } catch { toast('imageReadFailed'); }
 }
 
 editor.addEventListener('input', () => { clearTimeout(renderTimer); renderTimer = setTimeout(render, 100); scheduleSave(); updateCursor(); });
@@ -353,14 +245,15 @@ document.querySelectorAll('dialog').forEach(dialog => dialog.addEventListener('c
   if (event.target === dialog && (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom)) dialog.close();
 }));
 $('new-document').onclick = () => {
-  if (editor.value.trim() && !confirm('新建将替换当前草稿。请确认已保存需要保留的 Markdown 文件。')) return;
-  editor.value = ''; $('filename').value = '未命名文档'; render(); saveDraft(); editor.focus();
+  if (editor.value.trim() && !confirm(t('confirmNew'))) return;
+  editor.value = ''; $('filename').value = t('untitled'); render(); saveDraft(); editor.focus();
 };
 $('load-example').onclick = () => {
-  if (editor.value !== EXAMPLE && editor.value.trim() && !confirm('载入示例将替换当前草稿。请确认已保存需要保留的 Markdown 文件。')) return;
-  editor.value = EXAMPLE; $('filename').value = '示例文档'; render(); saveDraft();
+  const example = exampleFor(locale);
+  if (editor.value !== example && editor.value.trim() && !confirm(t('confirmExample'))) return;
+  editor.value = example; $('filename').value = t('exampleName'); render(); saveDraft();
 };
-$('zoom').onclick = () => { fit = !fit; fitPaper(); };
+$('zoom').onclick = () => { fit = !fit; updateZoomLabel(); fitPaper(); };
 $('mobile-preview').onclick = () => { $('workspace').classList.add('show-preview'); fitPaper(); };
 $('mobile-editor').onclick = () => $('workspace').classList.remove('show-preview');
 $('theme').onchange = event => { settings.theme = event.target.value; updateSettingsUI(); scheduleSave(); };
@@ -385,27 +278,35 @@ for (const key of ['width', 'height', 'margin', 'fontSize', 'lineHeight']) {
 $('export-dialog').addEventListener('close', updateSettingsUI);
 $('export-form').addEventListener('submit', async event => {
   event.preventDefault();
-  if (!editor.value.trim()) return setError('先写一点内容，再导出 PDF。');
-  if (settings.width - 2 * settings.margin < 40) return setError('页边距过大：正文宽度至少需要 40 mm。');
+  if (!editor.value.trim()) return setError('errorEmpty');
+  for (const key of ['width', 'height', 'margin', 'fontSize', 'lineHeight']) {
+    const input = $(key);
+    if (!input.disabled && !input.checkValidity()) {
+      return setError('errorRange', { key, low: input.min, high: input.max });
+    }
+  }
+  if (settings.width - 2 * settings.margin < 40) return setError('errorMargin');
   $('export-error').hidden = true;
   const submit = $('export-submit');
   submit.disabled = true;
-  submit.querySelector('span').textContent = '正在排版…';
+  exporting = true;
+  submit.querySelector('span').textContent = t('exporting');
   const exportName = filename('.pdf');
   try {
-    const response = await fetch('/api/export', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ markdown: editor.value, settings }), signal: AbortSignal.timeout(90000) });
+    const response = await fetch('/api/export', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept-Language': locale }, body: JSON.stringify({ markdown: editor.value, settings }), signal: AbortSignal.timeout(90000) });
     if (!response.ok) {
       const data = await response.json().catch(() => ({}));
-      throw new Error(data.error || `导出失败（${response.status}）`);
+      throw Object.assign(new Error('Export failed'), { key: Object.hasOwn(catalogs.en, data.code) ? data.code : 'errorStatus', parameters: data.params || { status: response.status } });
     }
     download(await response.blob(), exportName);
     $('export-dialog').close();
-    toast('PDF 已导出');
+    toast('pdfExported');
   } catch (error) {
-    setError(error.name === 'TimeoutError' ? '导出超时，请检查图片地址或缩短文档后重试。' : error.message === 'Failed to fetch' ? '无法连接 PDF 导出服务，请稍后重试。' : error.message);
+    setError(error.name === 'TimeoutError' ? 'errorTimeout' : error instanceof TypeError ? 'errorNetwork' : error.key || 'errorExport', error.parameters);
   } finally {
     submit.disabled = false;
-    submit.querySelector('span').textContent = '导出 PDF';
+    exporting = false;
+    submit.querySelector('span').textContent = t('exportPdf');
   }
 });
 let dragDepth = 0;
@@ -435,3 +336,41 @@ new ResizeObserver(fitPaper).observe(paper);
 updateSettingsUI();
 render();
 saveDraft();
+refreshLanguage();
+
+function updateCounts() {
+  // Counts describe document content and do not change when the UI language changes.
+  const count = Array.from(editor.value.replace(/!\[[^\]]*\]\(data:[^)]+\)/g, '[image]').replace(/\s/g, '')).length;
+  $('word-count').textContent = t('count', { count: count.toLocaleString(locale), lines: editor.value.split('\n').length.toLocaleString(locale) });
+}
+
+function updatePageSummary() {
+  const selected = Object.entries(presets).find(([, size]) => size[0] === settings.width && size[1] === settings.height);
+  const title = selected ? { a4: 'A4', a5: 'A5', letter: 'Letter' }[selected[0]] : t('custom');
+  $('page-summary').textContent = settings.mode === 'single' ? t('singleSummary', { width: settings.width }) : `${title} · ${settings.width} × ${settings.height} mm`;
+}
+
+function updateZoomLabel() {
+  $('zoom').querySelector('[data-i18n]').textContent = t(fit ? 'fitWidth' : 'actualSize');
+}
+
+function refreshLanguage() {
+  translatePage(locale);
+  $('language').value = locale;
+  $('save-status').textContent = t(saveState);
+  document.querySelector('.export-note').textContent = t('exportNote');
+  $('export-submit').querySelector('span').textContent = t(exporting ? 'exporting' : 'exportPdf');
+  if (lastError) $('export-error').textContent = t(lastError.key, lastError.parameters);
+  if (toastState) $('toast').textContent = t(toastState.key, toastState.parameters);
+  updateCounts();
+  updateCursor();
+  updatePageSummary();
+  updateZoomLabel();
+  fitPaper();
+}
+
+$('language').addEventListener('change', event => {
+  locale = resolveLocale(event.target.value);
+  try { localStorage.setItem(LANGUAGE_KEY, locale); } catch { /* Current session still switches. */ }
+  refreshLanguage();
+});

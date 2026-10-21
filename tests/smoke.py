@@ -21,7 +21,7 @@ out.mkdir(parents=True, exist_ok=True)
 
 with sync_playwright() as pw:
     browser = launch_browser(pw)
-    page = browser.new_page(viewport={"width": 1440, "height": 1000}, device_scale_factor=1)
+    page = browser.new_page(viewport={"width": 1440, "height": 1000}, device_scale_factor=1, locale="zh-CN")
     errors = []
     page.on('pageerror', lambda error: errors.append(str(error)))
     page.goto(args.url)

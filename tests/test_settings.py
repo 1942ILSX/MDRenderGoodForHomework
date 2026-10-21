@@ -31,6 +31,16 @@ class ExportValidationTests(unittest.TestCase):
         self.assertEqual(self.client.post('/api/export', data='markdown=x').status_code, 415)
         self.assertEqual(self.client.get('/', headers={"Host": "unrelated.example"}).status_code, 403)
 
+    def test_error_language_follows_each_request(self):
+        for language, expected in [("en-US", "Write something before exporting a PDF."), ("zh-CN", "先写一点内容，再导出 PDF。"), ("en-GB", "Write something before exporting a PDF.")]:
+            response = self.client.post('/api/export', json={"markdown": ""}, headers={"Accept-Language": language})
+            self.assertEqual(response.status_code, 400)
+            self.assertEqual(response.json['code'], 'errorEmpty')
+            self.assertEqual(response.json['error'], expected)
+        response = self.client.post('/api/export', json={"markdown": "x", "settings": {"width": 10}}, headers={"Accept-Language": "en"})
+        self.assertEqual(response.json['params'], {"key": "width", "low": 80, "high": 420})
+        self.assertEqual(response.headers['Content-Language'], 'en')
+
 
 if __name__ == '__main__':
     unittest.main()

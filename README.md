@@ -33,6 +33,8 @@ Windows 下可使用 `python -m venv .venv`，在 PowerShell 中用 `.venv\Scrip
 
 ## 使用
 
+UI 支持简体中文和 English，可在顶部的 language selector 随时切换。首次打开跟随 browser language，之后保存 language preference；切换时保留 Markdown、filename 和 PDF settings。菜单、tooltips、syntax guide、status 和 API errors 均支持 i18n。
+
 - 支持标题、表格、任务列表、引用、链接、代码高亮和数学公式。
 - 「打开文件」或拖入 `.md`、`.markdown`、`.txt` 文件；「保存 MD」下载源码。
 - 图片按钮或粘贴操作可嵌入本地图片，图片随 Markdown 文件一起保存。
@@ -71,21 +73,27 @@ PDF 由 Chromium 原生打印生成，保留文字、公式和代码高亮。预
 ```bash
 pip install -r requirements-dev.txt
 python -m unittest discover -s tests
+npm run test:i18n
 
 # 在一个终端启动本地服务：
 python main.py --no-browser
 
 # 在另一个激活了相同虚拟环境的终端运行浏览器测试：
 python tests/smoke.py
+python tests/i18n-browser.py
 ```
 
 浏览器测试检查预览、公式、代码、草稿保存、PDF 下载、单页与分页、自定义宽度、中文文字、图片和手机布局。测试产物保存在已忽略的 `tests/results/` 中。
+
+i18n tests 额外检查 language detection、language preference、旧 draft 保留、translation catalogs、API errors、mobile layout 和 storage unavailable；两种 UI language 下均实际执行 PDF export。
 
 用 `python main.py --port 8766` 更换端口，或用 `--no-browser` 关闭自动打开浏览器。
 
 | 路径 | 内容 |
 | --- | --- |
 | `src/app.js` | 编辑器交互、文件与图片导入、草稿保存 |
+| `src/i18n.js`、`locales/` | UI 与 local API 共用的 i18n helpers 和 translation catalogs |
+| `src/examples.js` | 中文与 English example documents |
 | `src/renderer.js` | Markdown / LaTeX 渲染及打印排版 |
 | `static/` | HTML 模板和手写 CSS |
 | `main.py` | 本机 HTTP 服务和 PDF 导出 |

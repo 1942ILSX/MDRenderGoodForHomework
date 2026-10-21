@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import io
 import ipaddress
+import json
 import math
 import os
 from pathlib import Path
@@ -19,16 +20,37 @@ ROOT = Path(__file__).resolve().parent
 app = Flask(__name__, static_folder=str(ROOT / "static"), static_url_path="/static")
 app.config["MAX_CONTENT_LENGTH"] = 20 * 1024 * 1024
 export_lock = threading.BoundedSemaphore(2)
+MESSAGES = {locale: json.loads((ROOT / "locales" / f"{locale}.json").read_text(encoding="utf-8"))
+            for locale in ("zh-CN", "en")}
+
+
+class ApplicationError(ValueError):
+    def __init__(self, code, params=None, status=400):
+        self.code, self.params, self.status = code, params or {}, status
+        super().__init__(MESSAGES["zh-CN"][code].format(**self.params))
+
+
+def error_response(code, status, params=None):
+    locale = "zh-CN"
+    for language, quality in request.accept_languages:
+        base = language.lower().split("-")[0]
+        if quality > 0 and base in {"zh", "en"}:
+            locale = "zh-CN" if base == "zh" else "en"
+            break
+    params = params or {}
+    response = jsonify(error=MESSAGES[locale][code].format(**params), code=code, params=params)
+    response.headers["Content-Language"] = locale
+    return response, status
 
 
 @app.before_request
 def local_requests_only():
     if request.host.split(":")[0] not in {"127.0.0.1", "localhost", "[::1]"}:
-        return jsonify(error="仅支持本机访问。"), 403
+        return error_response("errorLocalOnly", 403)
     if request.method == "POST":
         origin = request.headers.get("Origin")
         if origin and origin != request.host_url.rstrip("/"):
-            return jsonify(error="请从应用页面执行导出。"), 403
+            return error_response("errorOrigin", 403)
 
 
 @app.after_request
@@ -56,15 +78,15 @@ def print_page():
 
 def validate_settings(data):
     if not isinstance(data, dict):
-        raise ValueError("导出参数必须是对象。")
+        raise ApplicationError("errorPayload")
     source = data.get("markdown")
     if not isinstance(source, str) or not source.strip():
-        raise ValueError("先写一点内容，再导出 PDF。")
+        raise ApplicationError("errorEmpty")
     if len(source.encode("utf-8")) > 16 * 1024 * 1024:
-        raise ValueError("文档过大，请将文档和内嵌图片控制在 16 MB 内。")
+        raise ApplicationError("errorDocumentSize")
     raw = data.get("settings", {})
     if not isinstance(raw, dict):
-        raise ValueError("页面设置格式不正确。")
+        raise ApplicationError("errorSettings")
     settings = {}
     for key, default, low, high in [
         ("width", 210, 80, 420), ("height", 297, 100, 600),
@@ -73,22 +95,22 @@ def validate_settings(data):
     ]:
         value = raw.get(key, default)
         if isinstance(value, bool):
-            raise ValueError(f"{key} 参数不正确。")
+            raise ApplicationError("errorNumber", {"key": key})
         try:
             value = float(value)
         except (ValueError, TypeError):
-            raise ValueError(f"{key} 参数不正确。") from None
+            raise ApplicationError("errorNumber", {"key": key}) from None
         if not math.isfinite(value) or not low <= value <= high:
-            raise ValueError(f"{key} 必须在 {low}–{high} 之间。")
+            raise ApplicationError("errorRange", {"key": key, "low": low, "high": high})
         settings[key] = value
     if settings["width"] - 2 * settings["margin"] < 40:
-        raise ValueError("页边距过大：正文宽度至少需要 40 mm。")
+        raise ApplicationError("errorMargin")
     settings["mode"] = raw.get("mode", "paged")
     if settings["mode"] not in {"single", "paged"}:
-        raise ValueError("请选择单页或分页导出。")
+        raise ApplicationError("errorMode")
     settings["theme"] = raw.get("theme", "editorial")
     if settings["theme"] not in {"editorial", "academic", "minimal"}:
-        raise ValueError("不支持此排版主题。")
+        raise ApplicationError("errorTheme")
     return source, settings
 
 
@@ -114,7 +136,7 @@ def launch_browser(playwright):
     try:
         return playwright.chromium.launch(channel="chrome")
     except BrowserError as exc:
-        raise RuntimeError("未找到可用浏览器。请安装 Google Chrome，或运行 python -m playwright install chromium。") from exc
+        raise ApplicationError("errorBrowser", status=503) from exc
 
 
 def make_pdf(source, settings, base_url):
@@ -139,13 +161,13 @@ def make_pdf(source, settings, base_url):
             page.emulate_media(media="print")
             measurement = page.evaluate("payload => window.renderForPrint(payload)", {"markdown": source, "settings": settings})
             if measurement["brokenImages"]:
-                raise ValueError("有图片无法加载。请检查图片地址，或用工具栏的图片按钮插入本地图片后重试。")
+                raise ApplicationError("errorImages", status=422)
             if measurement["overflow"]:
-                raise ValueError("部分公式或表格超出正文宽度。请增大页面宽度、减小字号或为长公式分行。")
+                raise ApplicationError("errorOverflow", status=422)
             if settings["mode"] == "single":
                 height = math.ceil((measurement["height"] + 3) * 25.4 / 96 + 2 * settings["margin"])
                 if height > 5080:
-                    raise ValueError("文档超过单页 PDF 的 5080 mm 高度上限，请增加页面宽度或使用分页导出。")
+                    raise ApplicationError("errorHeight", status=422)
                 height = max(height, 30)
             else:
                 height = settings["height"]
@@ -161,30 +183,30 @@ def make_pdf(source, settings, base_url):
 @app.post("/api/export")
 def export_pdf():
     if not request.is_json:
-        return jsonify(error="请使用 JSON 格式提交文档。"), 415
+        return error_response("errorJsonType", 415)
     try:
         source, settings = validate_settings(request.get_json(silent=True))
-    except ValueError as exc:
-        return jsonify(error=str(exc)), 400
+    except ApplicationError as exc:
+        return error_response(exc.code, exc.status, exc.params)
     if not export_lock.acquire(blocking=False):
-        return jsonify(error="正在处理其他导出，请稍后重试。"), 429
+        return error_response("errorLocalBusy", 429)
     try:
         pdf = make_pdf(source, settings, request.host_url.rstrip("/"))
         return send_file(io.BytesIO(pdf), mimetype="application/pdf", as_attachment=True, download_name="document.pdf")
-    except ValueError as exc:
-        return jsonify(error=str(exc)), 422
-    except RuntimeError as exc:
-        return jsonify(error=str(exc)), 503
+    except ApplicationError as exc:
+        return error_response(exc.code, exc.status, exc.params)
+    except RuntimeError:
+        return error_response("errorExport", 503)
     except BrowserError:
         app.logger.exception("PDF rendering failed")
-        return jsonify(error="PDF 渲染失败或图片加载超时，请检查内容后重试。"), 500
+        return error_response("errorExport", 500)
     finally:
         export_lock.release()
 
 
 @app.errorhandler(413)
 def too_large(_error):
-    return jsonify(error="文档和图片总大小超过 20 MB，请缩小图片后重试。"), 413
+    return error_response("errorBodySize", 413)
 
 
 def main():

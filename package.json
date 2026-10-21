@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "node build.mjs"
+    "build": "node build.mjs",
+    "test:i18n": "node --test tests/i18n.test.mjs"
   },
   "engines": {
     "node": ">=22"
